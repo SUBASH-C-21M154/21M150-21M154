@@ -1,0 +1,591 @@
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+
+#dataset containing incidents related to
+
+'''
+
+
+| Incident ID | Description                                    | Symptoms                              | Potential Causes                           | Solution Applied                         | Timestamp  |
+|-------------|------------------------------------------------|---------------------------------------|--------------------------------------------|------------------------------------------|------------|
+| 1           | Weak signal strength in conference room        | Devices unable to connect, slow speed | Interference from nearby devices, outdated firmware | Adjusted AP placement, updated firmware | 2023-08-15 |
+| 2           | Intermittent connectivity in office area      | Devices frequently disconnecting     | Overlapping channels, client congestion     | Changed channel, enabled Fast Roaming   | 2023-08-20 |
+| 3           | Unauthorized access to network                | Unknown devices on network           | Weak security settings, unauthorized access | Updated security settings, changed passwords | 2023-08-22 |
+| 4           | Slow data transfer in break room              | Slow speeds during peak hours       | Bandwidth congestion, improper QoS settings | Configured QoS settings, monitored bandwidth | 2023-08-25 |
+| 5           | No network connection in lobby                | Devices unable to connect           | Access point power outage, disconnected cable | Restored power, reconnected cable       | 2023-08-28 |
+| 6           | Network latency during video conferencing     | High latency during video calls     | Network congestion, insufficient bandwidth | Optimized network traffic, allocated more bandwidth | 2023-09-03 |
+| 7           | Access point reboot loop                      | Access point repeatedly restarting  | Firmware update failure, hardware issue      | Rolled back firmware, replaced hardware | 2023-09-10 |
+| 8           | Unstable Wi-Fi connection in cafeteria        | Frequent connection drops           | Interference from microwave ovens, channel interference | Changed channel, relocated microwave ovens | 2023-09-15 |
+| 9           | Signal drop in basement office                | Devices unable to connect           | Obstruction of signal, AP misconfiguration | Repositioned AP, adjusted settings     | 2023-09-20 |
+| 10          | Continuous disconnects in meeting room        | Devices frequently lose connection  | AP overheating, interference from neighboring networks | Installed cooling solution, changed channel | 2023-09-22 |
+| 11          | Network outage after power surge              | All devices offline                 | AP hardware damage, power surge             | Replaced hardware, added surge protector | 2023-09-25 |
+| 12          | Slow internet in open workspace               | Slow browsing and downloads         | Bandwidth saturation, lack of load balancing | Implemented load balancing, monitored traffic | 2023-09-28 |
+| 13          | Random disconnections across building        | Frequent and sudden disconnects     | Cable faults, firmware glitch              | Replaced cables, updated firmware     | 2023-10-03 |
+| 14          | Overlapping SSIDs causing confusion          | Devices connect to wrong network    | Multiple SSIDs broadcasting, lack of network segregation | Simplified SSID names, implemented VLANs | 2023-10-10 |
+| 15          | Network slowdown during backups               | Sluggish network during backup operations | Backup traffic consuming bandwidth, QoS misconfiguration | Scheduled backups during off-peak hours, adjusted QoS | 2023-10-15 |
+| 16          | Frequent DNS resolution failures             | Websites not loading intermittently | DNS server issues, misconfigured DNS settings | Changed DNS servers, validated settings | 2023-10-18 |
+| 17          | Devices not receiving IP addresses           | Devices fail to connect to the network | DHCP server failure, IP address pool exhaustion | Restarted DHCP service, expanded IP pool | 2023-10-22 |
+| 18          | Network printer inaccessible                 | Unable to print from devices         | Printer driver conflicts, subnet mismatch  | Updated printer drivers, adjusted subnet settings | 2023-10-25 |
+| 19          | Network congestion in staff lounge           | Slow speeds during lunch hour       | Heavy user traffic, lack of bandwidth management | Implemented bandwidth throttling, educated users | 2023-10-28 |
+| 20          | AP firmware update causing issues            | Devices unable to connect after update | Firmware compatibility issues, settings reset | Rolled back firmware, reconfigured settings | 2023-11-02 |
+| 21          | Frequent access point crashes                | APs going offline periodically      | Memory overload, software bugs              | Restarted APs, applied software patches | 2023-11-08 |
+| 22          | Disrupted video streaming in lounge          | Video playback buffers frequently    | Network congestion, streaming traffic prioritization | Configured QoS for streaming, monitored traffic | 2023-11-12 |
+
+'''
+#STEP 1 PREPROCESSING
+
+
+# Load the dataset
+file_path = "sample_incident_dataset.csv"  # Replace with your dataset file path
+df = pd.read_csv(file_path)
+
+# Drop rows with missing values (optional)
+df.dropna(inplace=True)
+
+# Preprocess categorical columns using Label Encoding
+label_encoder = LabelEncoder()
+categorical_columns = ["Description", "Symptoms", "Potential Causes", "Solution Applied"]
+for col in categorical_columns:
+    df[col] = label_encoder.fit_transform(df[col])
+
+# Convert the "Timestamp" column to datetime format
+df["Timestamp"] = pd.to_datetime(df["Timestamp"])
+
+# Display the preprocessed DataFrame
+print(df.head())
+
+
+#STEP 2 NLU
+
+
+# Load the English language model
+nlp = spacy.load("en_core_web_sm")
+
+# Load the preprocessed incident dataset
+file_path = "preprocessed_incident_dataset.csv"  # Replace with your dataset file path
+df = pd.read_csv(file_path)
+
+# Process descriptions using spaCy
+descriptions = df["Description"]
+
+# Lists to store tokenized and lemmatized data
+tokenized_texts = []
+lemmatized_texts = []
+entities = []
+
+# Process each description
+for text in descriptions:
+    doc = nlp(text)
+    
+    # Tokenization and Lemmatization
+    tokens = [token.text for token in doc if not token.is_punct and not token.is_space]
+    lemmas = [token.lemma_ for token in doc if not token.is_punct and not token.is_space]
+    
+    # Entity Extraction
+    detected_entities = [(ent.text, ent.label_) for ent in doc.ents]
+    
+    tokenized_texts.append(tokens)
+    lemmatized_texts.append(lemmas)
+    entities.append(detected_entities)
+
+# Add tokenized, lemmatized, and entities columns to the DataFrame
+df["Tokenized_Description"] = tokenized_texts
+df["Lemmatized_Description"] = lemmatized_texts
+df["Entities"] = entities
+
+# Display the DataFrame with processed data
+print(df.head())
+
+
+#STEP 3 INCIDENT CALSSIFICATION
+
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import classification_report
+
+# Load the preprocessed incident dataset
+file_path = "preprocessed_incident_dataset.csv"  # Replace with your dataset file path
+df = pd.read_csv(file_path)
+
+# Prepare features and labels
+X = df["Lemmatized_Description"].apply(lambda x: ' '.join(x))
+y = df["Category"]  # Replace "Category" with the actual column name for incident categories
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# TF-IDF vectorization
+tfidf_vectorizer = TfidfVectorizer(max_features=1000)
+X_train_tfidf = tfidf_vectorizer.fit_transform(X_train)
+X_test_tfidf = tfidf_vectorizer.transform(X_test)
+
+# Train a Multinomial Naive Bayes classifier
+classifier = MultinomialNB()
+classifier.fit(X_train_tfidf, y_train)
+
+# Predict incident categories
+y_pred = classifier.predict(X_test_tfidf)
+
+# Evaluate the classifier
+print(classification_report(y_test, y_pred))
+
+
+#STEP 4 Solution Recommendation
+
+
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+# Load the preprocessed incident dataset
+file_path = "preprocessed_incident_dataset.csv"  # Replace with your dataset file path
+df = pd.read_csv(file_path)
+
+# Prepare features and incident descriptions
+X = df["Lemmatized_Description"].apply(lambda x: ' '.join(x))
+
+# TF-IDF vectorization
+tfidf_vectorizer = TfidfVectorizer(max_features=1000)
+X_tfidf = tfidf_vectorizer.fit_transform(X)
+
+# Calculate cosine similarity matrix
+cosine_sim = cosine_similarity(X_tfidf)
+
+def get_similar_incidents(description, n=5):
+    description_tfidf = tfidf_vectorizer.transform([description])
+    similar_indices = cosine_sim.dot(description_tfidf.T).flatten().argsort()[-n:][::-1]
+    return df.iloc[similar_indices]
+
+# Provide an incident description to get solutions recommendations
+incident_description = "Devices frequently disconnecting in the office area"
+similar_incidents = get_similar_incidents(incident_description)
+recommended_solutions = similar_incidents["Solution Applied"]
+
+# Print recommended solutions
+print("Recommended Solutions:")
+for idx, solution in enumerate(recommended_solutions, start=1):
+    print(f"{idx}. {solution}")
+
+
+#STEP 5 Resolution Generation
+
+#resolution for the 22 incidents are listed below
+'''
+
+1. Incident: Weak signal strength in conference room
+   Resolution: Adjusted AP placement, updated firmware
+
+2. Incident: Intermittent connectivity in office area
+   Resolution: Changed channel, enabled Fast Roaming
+
+3. Incident: Unauthorized access to network
+   Resolution: Updated security settings, changed passwords
+
+4. Incident: Slow data transfer in break room
+   Resolution: Configured QoS settings, monitored bandwidth
+
+5. Incident: No network connection in lobby
+   Resolution: Restored power, reconnected cable
+
+6. Incident: Network latency during video conferencing
+   Resolution: Optimized network traffic, allocated more bandwidth
+
+7. Incident: Access point reboot loop
+   Resolution: Rolled back firmware, replaced hardware
+
+8. Incident: Unstable Wi-Fi connection in cafeteria
+   Resolution: Changed channel, relocated microwave ovens
+
+9. Incident: Signal drop in basement office
+   Resolution: Repositioned AP, adjusted settings
+
+10. Incident: Continuous disconnects in meeting room
+    Resolution: Installed cooling solution, changed channel
+
+11. Incident: Network outage after power surge
+    Resolution: Replaced hardware, added surge protector
+
+12. Incident: Slow internet in open workspace
+    Resolution: Implemented load balancing, monitored traffic
+
+13. Incident: Random disconnections across building
+    Resolution: Replaced cables, updated firmware
+
+14. Incident: Overlapping SSIDs causing confusion
+    Resolution: Simplified SSID names, implemented VLANs
+
+15. Incident: Network slowdown during backups
+    Resolution: Scheduled backups during off-peak hours, adjusted QoS
+
+16. Incident: Frequent DNS resolution failures
+    Resolution: Changed DNS servers, validated settings
+
+17. Incident: Devices not receiving IP addresses
+    Resolution: Restarted DHCP service, expanded IP pool
+
+18. Incident: Network printer inaccessible
+    Resolution: Updated printer drivers, adjusted subnet settings
+
+19. Incident: Network congestion in staff lounge
+    Resolution: Implemented bandwidth throttling, educated users
+
+20. Incident: AP firmware update causing issues
+    Resolution: Rolled back firmware, reconfigured settings
+
+21. Incident: Frequent access point crashes
+    Resolution: Restarted APs, applied software patches
+
+22. Incident: Disrupted video streaming in lounge
+    Resolution: Configured QoS for streaming, monitored traffic
+
+'''
+
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+# Load the preprocessed incident dataset
+file_path = "preprocessed_incident_dataset.csv"  # Replace with your dataset file path
+df = pd.read_csv(file_path)
+
+# Prepare features and incident descriptions
+X = df["Lemmatized_Description"].apply(lambda x: ' '.join(x))
+
+# TF-IDF vectorization
+tfidf_vectorizer = TfidfVectorizer(max_features=1000)
+X_tfidf = tfidf_vectorizer.fit_transform(X)
+
+# Calculate cosine similarity matrix
+cosine_sim = cosine_similarity(X_tfidf)
+
+def get_similar_incidents(description, n=5):
+    description_tfidf = tfidf_vectorizer.transform([description])
+    similar_indices = cosine_sim.dot(description_tfidf.T).flatten().argsort()[-n:][::-1]
+    return df.iloc[similar_indices]
+
+def get_resolution_for_description(description):
+    similar_incidents = get_similar_incidents(description)
+    recommended_solutions = similar_incidents["Solution Applied"].tolist()
+    return recommended_solutions
+
+# Provide an incident description to get resolutions
+incident_description = "Devices frequently disconnecting in the office area"
+recommended_resolutions = get_resolution_for_description(incident_description)
+
+# Display recommended resolutions
+print("Recommended Resolutions:")
+for idx, resolution in enumerate(recommended_resolutions, start=1):
+    print(f"{idx}. {resolution}")
+
+
+#STEP 6 Integration with Knowledge Base
+
+
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import spacy
+
+# Load the preprocessed incident dataset
+file_path = "preprocessed_incident_dataset.csv"  # Replace with your dataset file path
+df = pd.read_csv(file_path)
+
+# Load the English language model for NLU
+nlp = spacy.load("en_core_web_sm")
+
+# TF-IDF vectorization
+tfidf_vectorizer = TfidfVectorizer(max_features=1000)
+X_tfidf = tfidf_vectorizer.fit_transform(df["Lemmatized_Description"].apply(lambda x: ' '.join(x)))
+
+# Calculate cosine similarity matrix
+cosine_sim = cosine_similarity(X_tfidf)
+
+def get_similar_incidents(description, n=5):
+    description_tfidf = tfidf_vectorizer.transform([description])
+    similar_indices = cosine_sim.dot(description_tfidf.T).flatten().argsort()[-n:][::-1]
+    return df.iloc[similar_indices]
+
+def get_resolution_for_description(description):
+    similar_incidents = get_similar_incidents(description)
+    recommended_solutions = similar_incidents["Solution Applied"].tolist()
+    return recommended_solutions
+
+# Knowledge base: Incident categories mapped to relevant information
+knowledge_base = {
+    "Weak signal strength": "Weak signal strength can result from incorrect AP placement or outdated firmware.",
+    "Intermittent connectivity": "Intermittent connectivity might be due to overlapping channels or client congestion.",
+    "Unauthorized access": "Unauthorized access could be caused by weak security settings or unauthorized access.",
+    # Add more entries based on your dataset and categories
+}
+
+# Interactive loop
+while True:
+    user_input = input("Enter an incident description (or type 'exit' to quit): ")
+    
+    if user_input.lower() == 'exit':
+        print("Exiting...")
+        break
+    
+    # Process user input with NLU
+    doc = nlp(user_input)
+    lemmatized_input = [token.lemma_ for token in doc if not token.is_punct and not token.is_space]
+    
+    # Get resolutions based on similar incidents
+    recommended_resolutions = get_resolution_for_description(lemmatized_input)
+    
+    # Get incident category from user input
+    incident_category = lemmatized_input[0] if lemmatized_input else "Other"
+    
+    # Get relevant information from knowledge base
+    knowledge_info = knowledge_base.get(incident_category, "No information available")
+    
+    # Display recommended resolutions and knowledge information
+    print("Recommended Resolutions:")
+    for idx, resolution in enumerate(recommended_resolutions, start=1):
+        print(f"{idx}. {resolution}")
+    
+    print("\nKnowledge Base Information:")
+    print(knowledge_info)
+
+
+# CREATION OF resolution
+
+import tkinter as tk
+from tkinter import scrolledtext
+from tkinter import messagebox
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import spacy
+import pandas as pd
+
+# Load the preprocessed incident dataset
+file_path = "preprocessed_incident_dataset.csv"  # Replace with your dataset file path
+df = pd.read_csv(file_path)
+
+# Load the English language model for NLU
+nlp = spacy.load("en_core_web_sm")
+
+# TF-IDF vectorization
+tfidf_vectorizer = TfidfVectorizer(max_features=1000)
+X_tfidf = tfidf_vectorizer.fit_transform(df["Lemmatized_Description"].apply(lambda x: ' '.join(x)))
+
+# Calculate cosine similarity matrix
+cosine_sim = cosine_similarity(X_tfidf)
+
+def get_similar_incidents(description, n=5):
+    description_tfidf = tfidf_vectorizer.transform([description])
+    similar_indices = cosine_sim.dot(description_tfidf.T).flatten().argsort()[-n:][::-1]
+    return df.iloc[similar_indices]
+
+def get_resolution_for_description(description):
+    similar_incidents = get_similar_incidents(description)
+    recommended_solutions = similar_incidents["Solution Applied"].tolist()
+    return recommended_solutions
+
+def on_submit():
+    user_input = input_text.get("1.0", tk.END).strip()
+    
+    if user_input.lower() == 'exit':
+        root.destroy()
+    
+    doc = nlp(user_input)
+    lemmatized_input = [token.lemma_ for token in doc if not token.is_punct and not token.is_space]
+    
+    recommended_resolutions = get_resolution_for_description(lemmatized_input)
+    
+    incident_category = lemmatized_input[0] if lemmatized_input else "Other"
+    
+    knowledge_info = knowledge_base.get(incident_category, "No information available")
+    
+    result_text.config(state=tk.NORMAL)
+    result_text.delete("1.0", tk.END)
+    result_text.insert(tk.END, "Recommended Resolutions:\n")
+    for idx, resolution in enumerate(recommended_resolutions, start=1):
+        result_text.insert(tk.END, f"{idx}. {resolution}\n")
+    
+    result_text.insert(tk.END, "\nKnowledge Base Information:\n")
+    result_text.insert(tk.END, knowledge_info)
+    result_text.config(state=tk.DISABLED)
+
+root = tk.Tk()
+root.title("Incident Analysis and Resolution UI")
+
+input_label = tk.Label(root, text="Enter an incident description:")
+input_label.pack()
+
+input_text = scrolledtext.ScrolledText(root, height=5, width=50)
+input_text.pack()
+
+submit_button = tk.Button(root, text="Submit", command=on_submit)
+submit_button.pack()
+
+result_text = scrolledtext.ScrolledText(root, height=10, width=50, state=tk.DISABLED)
+result_text.pack()
+
+knowledge_base = {
+    "Weak signal strength": "Weak signal strength can result from incorrect AP placement or outdated firmware.",
+    "Intermittent connectivity": "Intermittent connectivity might be due to overlapping channels or client congestion.",
+    "Unauthorized access": "Unauthorized access could be caused by weak security settings or unauthorized access.",
+    # Add more entries based on your dataset and categories
+}
+
+root.mainloop()
+
+
+# Continuous Learning
+
+
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import spacy
+from sklearn.pipeline import Pipeline
+from sklearn.externals import joblib
+
+# Load the preprocessed incident dataset
+file_path = "preprocessed_incident_dataset.csv"  # Replace with your dataset file path
+df = pd.read_csv(file_path)
+
+# Load the English language model for NLU
+nlp = spacy.load("en_core_web_sm")
+
+# TF-IDF vectorization
+tfidf_vectorizer = TfidfVectorizer(max_features=1000)
+X_tfidf = tfidf_vectorizer.fit_transform(df["Lemmatized_Description"].apply(lambda x: ' '.join(x)))
+
+# Calculate cosine similarity matrix
+cosine_sim = cosine_similarity(X_tfidf)
+
+def get_similar_incidents(description, n=5):
+    description_tfidf = tfidf_vectorizer.transform([description])
+    similar_indices = cosine_sim.dot(description_tfidf.T).flatten().argsort()[-n:][::-1]
+    return df.iloc[similar_indices]
+
+def get_resolution_for_description(description):
+    similar_incidents = get_similar_incidents(description)
+    recommended_solutions = similar_incidents["Solution Applied"].tolist()
+    return recommended_solutions
+
+def on_submit():
+    user_input = input_text.get("1.0", tk.END).strip()
+    
+    if user_input.lower() == 'exit':
+        root.destroy()
+    
+    doc = nlp(user_input)
+    lemmatized_input = [token.lemma_ for token in doc if not token.is_punct and not token.is_space]
+    
+    recommended_resolutions = get_resolution_for_description(lemmatized_input)
+    
+    incident_category = lemmatized_input[0] if lemmatized_input else "Other"
+    
+    knowledge_info = knowledge_base.get(incident_category, "No information available")
+    
+    result_text.config(state=tk.NORMAL)
+    result_text.delete("1.0", tk.END)
+    result_text.insert(tk.END, "Recommended Resolutions:\n")
+    for idx, resolution in enumerate(recommended_resolutions, start=1):
+        result_text.insert(tk.END, f"{idx}. {resolution}\n")
+    
+    result_text.insert(tk.END, "\nKnowledge Base Information:\n")
+    result_text.insert(tk.END, knowledge_info)
+    result_text.config(state=tk.DISABLED)
+
+root = tk.Tk()
+root.title("Incident Analysis and Resolution UI")
+
+input_label = tk.Label(root, text="Enter an incident description:")
+input_label.pack()
+
+input_text = scrolledtext.ScrolledText(root, height=5, width=50)
+input_text.pack()
+
+submit_button = tk.Button(root, text="Submit", command=on_submit)
+submit_button.pack()
+
+result_text = scrolledtext.ScrolledText(root, height=10, width=50, state=tk.DISABLED)
+result_text.pack()
+
+knowledge_base = {
+    "Weak signal strength": "Weak signal strength can result from incorrect AP placement or outdated firmware.",
+    "Intermittent connectivity": "Intermittent connectivity might be due to overlapping channels or client congestion.",
+    "Unauthorized access": "Unauthorized access could be caused by weak security settings or unauthorized access.",
+    # Add more entries based on your dataset and categories
+}
+
+root.mainloop()
+
+# Periodic retraining
+new_data_file_path = "new_incident_data.csv"  # Replace with the path to the new incident data
+new_df = pd.read_csv(new_data_file_path)
+
+# Merge the new data with the existing dataset
+merged_df = pd.concat([df, new_df], ignore_index=True)
+
+# Perform preprocessing on the merged dataset
+# (similar to the preprocessing code you provided earlier)
+
+# Re-train the TF-IDF vectorizer
+X_tfidf = tfidf_vectorizer.fit_transform(merged_df["Lemmatized_Description"].apply(lambda x: ' '.join(x)))
+cosine_sim = cosine_similarity(X_tfidf)
+
+# Save the updated model
+updated_model = {
+    "tfidf_vectorizer": tfidf_vectorizer,
+    "cosine_sim": cosine_sim,
+    "knowledge_base": knowledge_base
+}
+joblib.dump(updated_model, "incident_resolution_model.pkl")
+
+
+# visulaization and recommendations
+
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Load the preprocessed incident dataset
+file_path = "preprocessed_incident_dataset.csv"  # Replace with your dataset file path
+df = pd.read_csv(file_path)
+
+# Visualization 1: Incident Category Distribution
+plt.figure(figsize=(10, 6))
+sns.countplot(data=df, y="Category")
+plt.title("Incident Category Distribution")
+plt.xlabel("Number of Incidents")
+plt.ylabel("Incident Category")
+plt.tight_layout()
+plt.show()
+
+# Visualization 2: Symptoms Distribution
+symptoms_df = df["Symptoms"].str.split(", ", expand=True).stack().reset_index(level=1, drop=True).to_frame(name="Symptom")
+plt.figure(figsize=(10, 6))
+sns.countplot(data=symptoms_df, y="Symptom", order=symptoms_df["Symptom"].value_counts().index)
+plt.title("Symptoms Distribution")
+plt.xlabel("Number of Incidents")
+plt.ylabel("Symptom")
+plt.tight_layout()
+plt.show()
+
+# Visualization 3: Potential Causes Distribution
+causes_df = df["Potential Causes"].str.split(", ", expand=True).stack().reset_index(level=1, drop=True).to_frame(name="Potential Cause")
+plt.figure(figsize=(10, 6))
+sns.countplot(data=causes_df, y="Potential Cause", order=causes_df["Potential Cause"].value_counts().index)
+plt.title("Potential Causes Distribution")
+plt.xlabel("Number of Incidents")
+plt.ylabel("Potential Cause")
+plt.tight_layout()
+plt.show()
+
+# Generate a Report
+report = df.groupby("Category")[["Symptoms", "Potential Causes", "Solution Applied"]].apply(lambda x: x.sample(1)).reset_index(drop=True)
+report.to_csv("incident_report.csv", index=False)
+print("Incident Report Generated: incident_report.csv")
+
+
+
+
